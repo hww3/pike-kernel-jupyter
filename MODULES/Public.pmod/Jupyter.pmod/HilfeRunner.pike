@@ -64,28 +64,27 @@ void ipc_send(object socket) {
 
 void ipc_recv(object socket, mixed ... messages) {
   werror("IPC: %O\n", messages);
-  if(sizeof(messages)==1) {
   
-    if(messages[0]->dta == "ALIVE") {
-    remote_ipc->send(Message("GLADTOHEARIT"), 0);
+  if(sizeof(messages) > 1 && messages[1]->dta != current_message->message->header->msg_id) {
+    werror("WARNING: Received a message from RemoteHilfe for different request");
+  } 
+  
+  if(messages[0]->dta == "alive") {
+    remote_ipc->send(Message("gladtohearit"), 0);
 	started = 1;
     call_out(write_input, 0);
 	return;
 	}
-	
-	werror("Got unknown message %O\n", messages[0]->dta);
-	return;
-  }
-  if(messages[1]->dta == "complete") {
-    current_message->state = "complete";
+  else if((<"stderr", "stdout", "error", "result", "complete">)[messages[0]->dta]) {
+    if(!current_message) { 
+	  werror("Got an out of turn message for a request\n");
+	  return;
+	}
+    current_message->state = messages[0]->dta;
     current_message->data = messages[2]->dta;
     complete_request();
-  } else if(messages[1]->dta == "error") {
-    current_message->state = "error";
-    current_message->data = messages[2]->dta;
-    complete_request();    
-  } else if(messages[1]->dta == "stdout") {
-    read_stdout(messages[0], messages[2]->dta);
+  } else {
+     werror("Unknown message %s\n", messages[0]->dta);
   }
 }
 
@@ -121,7 +120,7 @@ werror("write_input(%O)\n", args);
   else current_message = m;
   string s = current_message->message->content->code;
   werror("writing to hilfe: %O, %O\n", s, current_message);
-  remote_ipc->send(({Public.ZeroMQ.Message(current_message->message->header->msg_id), Public.ZeroMQ.Message("evaluate"),
+  remote_ipc->send(({Public.ZeroMQ.Message("evaluate"), Public.ZeroMQ.Message(current_message->message->header->msg_id), 
 		 			Public.ZeroMQ.Message(s)}));
 }
 
@@ -133,9 +132,9 @@ void complete_request() {
   string warn;
   mixed err;
   
-  if(msg->state == "complete")   {
-current_message = 0;
   werror("DATA: %O\n", msg->data);
+  if(msg->state == "result")   {
+current_message = 0;
   err = catch {
   [warn, count, out] = array_sscanf(msg->data, "%s(%d) Result: %s");
   };
@@ -145,8 +144,8 @@ current_message = 0;
 		 			Public.ZeroMQ.Message((sizeof(warn)?(warn+"\n"):"") + out)}));
   else
     ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("0"), Public.ZeroMQ.Message("")}));
-} else if(msg->state == "error") {
-    ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("error"), Public.ZeroMQ.Message(msg->data)}));
+} else {
+    ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message(msg->state), Public.ZeroMQ.Message(msg->data)}));
 
 }
   call_out(write_input, 0);

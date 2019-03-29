@@ -17,7 +17,7 @@ ADT.Queue queue = ADT.Queue();
 int waiting = 0;
 
   string outbuffer="";
-  string res_outbuffer = "";
+  array res_outbuffer = ({});
   
   mapping current_msg;
   
@@ -43,7 +43,7 @@ int waiting = 0;
 
   void announce() {
     if(!have_announced)
-	   queue->write(({Message("ALIVE")}));
+	   queue->write(({Message("alive")}));
   	call_out(announce, 0.5);
 	//  werror("Announced we're alive\n");
 	  
@@ -61,7 +61,7 @@ int waiting = 0;
   void ipc_recv(object socket, mixed ... messages) {
     //werror("IPC RECV: %O\n", messages);
 	if(sizeof(messages) == 1) {
-	  if(messages[0]->dta == "GLADTOHEARIT") {
+	  if(messages[0]->dta == "gladtohearit") {
 	  //werror("Have announced\n");
 	  have_announced = 1;
 	  return;
@@ -78,17 +78,19 @@ int waiting = 0;
 	}
 	
 		if(!state->finishedp()) {
-	    queue->write(({Message(messages[0]->dta), Message("error"), Message(sprintf("Incomplete Statement: %s",  
+	    queue->write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
 			(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
 		
 		))}));
 		state->flush();  
 		} else {
 		if(sizeof(outbuffer))
-  		  queue->write(({Message(messages[0]->dta), Message("stdout"), Message(outbuffer)}));  
-		queue->write(({Message(messages[0]->dta), Message("complete"), Message(res_outbuffer)}));  
+  		  queue->write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
+		  foreach(res_outbuffer;; string res)
+ 		    queue->write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
+	    queue->write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
 		outbuffer = "";
-		res_outbuffer = "";
+		res_outbuffer = ({});
 		}
   }
 
@@ -96,10 +98,10 @@ int waiting = 0;
  //! The standard @[reswrite] function.
   void std_reswrite(function w, string sres, int num, mixed res) {
     if(!sres)
-      res_outbuffer += ("Ok.\n");
+      res_outbuffer += ({("Ok.\n")});
     else
-      res_outbuffer += sprintf( "(%d) Result: %s\n", num,
-         replace(sres, "\n", "\n           "+(" "*sizeof(""+num))) );
+      res_outbuffer += ({sprintf( "(%d) Result: %s\n", num,
+         replace(sres, "\n", "\n           "+(" "*sizeof(""+num))) )});
   }
 
 
@@ -136,5 +138,5 @@ void run_poller(object poller) {
 //	werror("Remote Poll completed with rv=%d\n", rv);
   } while (rv >= 0 && keep_going);
   
-  //werror("Remote Poller exiting.\n");
+  //werror("RemoteHilfeemote Poller exiting.\n");
 }
