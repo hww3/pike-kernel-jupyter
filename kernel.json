@@ -1,0 +1,8 @@
+{
+ "argv": ["pike", "-x",
+          "pike_kernel", "-f",
+          "{connection_file}"],
+ "display_name": "Pike8",
+ "name": "Pike8",
+ "language": "pike"
+}
