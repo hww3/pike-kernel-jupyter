@@ -20,11 +20,21 @@ PIKE_KERNEL_DIR=/path/to/pike-kernel-jupyter
 PIKE_MODULE_PATH=$PIKE_MODULE_PATH:$PIKE_KERNEL_DIR/MODULES
 export PIKE_MODULE_PATH
 jupyter kernelspec install $PIKE_KERNEL_DIR
+```
+
+You can also install the contents of the MODULES directory into a location already in
+your pike module path and omit the steps that add to the Pike module path.
+
+## Using
+
+Start jupyter using the following command:
+
+```
 jupyter notebook
 ```
 
-You can also install the contents of the MODULES directory into a location already in 
-your pike module path.
+You can activate the Pike kernel for a notebook by using the "Change Kernel" command from the 
+"Kernel" menu and selecting "Pike 8". 
 
 ## To uninstall:
 
