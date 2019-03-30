@@ -11,6 +11,7 @@ object ipc; // inproc pair
 Thread.Thread poll_thread;
 int keep_going = 1;
 int have_announced = 0;
+int parent_id;
 
 ADT.Queue queue = ADT.Queue();
 
@@ -77,26 +78,31 @@ int waiting = 0;
       add_buffer(line);
 	}
 	
-		if(!state->finishedp()) {
-	    queue->write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
-			(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
-		
-		))}));
-		state->flush();  
-		} else {
-		if(sizeof(outbuffer))
-  		  queue->write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
-		  foreach(res_outbuffer;; string res)
- 		    queue->write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
-	    queue->write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
-		outbuffer = "";
-		res_outbuffer = ({});
-		}
+//	  queue->write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
+//		(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
+//			))}));
+	  if(sizeof(outbuffer))
+  	   queue->write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
+	  foreach(res_outbuffer;; string res)
+ 	    queue->write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
+
+	if(!state->finishedp()) {
+  	   queue->write(({Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
+		(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
+			))}));
+		state->flush();
+	}
+	else {
+	  queue->write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
+	}
+	  outbuffer = "";
+	  res_outbuffer = ({});
   }
 
 
  //! The standard @[reswrite] function.
   void std_reswrite(function w, string sres, int num, mixed res) {
+ // werror("RESWRITE: %O %O, %O, %O	\n", w, sres, num, res);
     if(!sres)
       res_outbuffer += ({("Ok.\n")});
     else
@@ -105,8 +111,10 @@ int waiting = 0;
   }
 
 
-  protected void create(int port)
+  protected void create(int port, int ppid)
   {
+    parent_id = ppid;
+	
     infile = Stdio.File("stdin");
 	infile->set_nonblocking();
 	infile->set_close_callback(stdin_closed);
@@ -120,8 +128,17 @@ int waiting = 0;
     poll->add_socket(ipc, ipc_recv, ipc_send);
     call_out(create_poll_threads, 0);
     call_out(announce, 0.5);
+	call_out(check_parent, 5);
     write=send_output;
     ::create();
+  }
+  
+  void check_parent() {
+    if(parent_id != System.getppid()) {
+	  werror("RemoteHilfe: parent died, exiting ourselves.\n");
+	  exit(0);
+	}
+    call_out(check_parent, 5);
   }
   
   void create_poll_threads() {

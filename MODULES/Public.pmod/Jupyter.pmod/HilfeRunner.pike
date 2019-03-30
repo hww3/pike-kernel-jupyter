@@ -42,7 +42,7 @@ void create(object ipc_socket, string session) {
   remote_ipc = Socket(context, PAIR);
   werror("HilfeRunner binding on tcp://localhost:" + port + "\n");
   remote_ipc->bind("tcp://*:" + port);
-  remote = Process.spawn_pike(({"-x", "pike_kernel", "-r", "" + port}), (["callback": process_state_cb, "stdin": infile, "stdout": outfile, "stderr": errfile]));
+  remote = Process.spawn_pike(({"-x", "pike_kernel", "-r", "" + port, "-p", "" + getpid()}), (["callback": process_state_cb, "stdin": infile, "stdout": outfile, "stderr": errfile]));
   poll->add_socket(remote_ipc, ipc_recv, ipc_send);
   call_out(create_poll_threads, 0);
   
@@ -64,8 +64,9 @@ void ipc_send(object socket) {
 
 void ipc_recv(object socket, mixed ... messages) {
   werror("IPC: %O\n", messages);
+  mixed msg = current_message;
   
-  if(sizeof(messages) > 1 && messages[1]->dta != current_message->message->header->msg_id) {
+  if(sizeof(messages) > 1 && messages[1]->dta != msg->message->header->msg_id) {
     werror("WARNING: Received a message from RemoteHilfe for different request");
   } 
   
@@ -76,13 +77,13 @@ void ipc_recv(object socket, mixed ... messages) {
 	return;
 	}
   else if((<"stderr", "stdout", "error", "result", "complete">)[messages[0]->dta]) {
-    if(!current_message) { 
+    if(!msg) { 
 	  werror("Got an out of turn message for a request\n");
 	  return;
 	}
-    current_message->state = messages[0]->dta;
-    current_message->data = messages[2]->dta;
-    complete_request();
+    msg->state = messages[0]->dta;
+    msg->data = messages[2]->dta;
+    complete_request(msg);
   } else {
      werror("Unknown message %s\n", messages[0]->dta);
   }
@@ -124,8 +125,7 @@ werror("write_input(%O)\n", args);
 		 			Public.ZeroMQ.Message(s)}));
 }
 
-void complete_request() {
-  mixed msg = current_message;
+void complete_request(mixed msg) {
   waiting = 0;
   int count;
   string out;
@@ -134,7 +134,6 @@ void complete_request() {
   
   werror("DATA: %O\n", msg->data);
   if(msg->state == "result")   {
-current_message = 0;
   err = catch {
   [warn, count, out] = array_sscanf(msg->data, "%s(%d) Result: %s");
   };
@@ -145,10 +144,17 @@ current_message = 0;
   else
     ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("0"), Public.ZeroMQ.Message("")}));
 } else {
+werror("sending " + msg->state + "\n");
+
     ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message(msg->state), Public.ZeroMQ.Message(msg->data)}));
+werror("sent " + msg->state + "\n");
 
 }
-  call_out(write_input, 0);
+  if((<"complete", "error">)[msg->state]) {
+    current_message = 0;
+    call_out(write_input, 0);
+  }
+	
 } 	
 
   void create_poll_threads() {

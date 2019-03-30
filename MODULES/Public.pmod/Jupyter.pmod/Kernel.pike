@@ -113,8 +113,9 @@ void completion_recv(object socket, mixed ... args) {
 	    sessions[args[1]->dta]->ipc = 0;
 	    sessions[args[1]->dta]->runner = 0;
  	 }
+	 return;
   }
-  werror("awaiting_answers: %O", awaiting_answers);
+  werror("awaiting_answers: %O", indices(awaiting_answers));
   mixed a = awaiting_answers[args[0]->dta];
   if(a) {
   werror("got matching request\n");
@@ -123,12 +124,12 @@ void completion_recv(object socket, mixed ... args) {
   
     // a "successful" evaluation has 3 parts: the msg id we're replying to, the statement number or type and the response.
     if(args[1]->dta == "error") {
-      object msg = .Messages.ExecuteReply(a, digest, args[2]->dta);
+      object msg = .Messages.ExecuteReply(a->msg, digest, args[2]->dta);
       array m = msg->to_messages();
       werror("reply: %O\n", m);
       shell->send(m);
 
-      msg = .Messages.Error(a, digest, args[2]->dta);
+      msg = .Messages.Error(a->msg, digest, args[2]->dta);
       m = msg->to_messages();
       werror("reply: %O\n", m);
       iopub->send(m);
@@ -136,31 +137,35 @@ void completion_recv(object socket, mixed ... args) {
 	
 	} else if(args[1]->dta == "stdout") {
 	werror("sending stdout to notebook.\n");
-	  iopub->send(.Messages.Stream(a, digest, "stdout", args[2]->dta)->to_messages());
+	  iopub->send(.Messages.Stream(a->msg, digest, "stdout", args[2]->dta)->to_messages());
 	  return;
 	} else if(args[1]->dta == "stderr") {
 	werror("sending stderr to notebook.\n");
-	  iopub->send(.Messages.Stream(a, digest, "stderr", args[2]->dta)->to_messages());
+	  iopub->send(.Messages.Stream(a->msg, digest, "stderr", args[2]->dta)->to_messages());
 	  return;
-	} else if(sizeof(args) == 3) {
-	
-      object msg = .Messages.ExecuteReply(a, digest, (int)(args[1]->dta), args[2]->dta);
+	} else if(args[1]->dta == "complete") {
+      object msg = .Messages.ExecuteReply(a->msg, digest, a->last_result, args[2]->dta);
       array m = msg->to_messages();
       werror("reply: %O\n", m);
       shell->send(m);
-      msg = .Messages.ExecuteResult(a, digest, (int)(args[1]->dta), args[2]->dta);
-      m = msg->to_messages();
-      werror("reply: %O\n", m);
-      iopub->send(m);
-      werror("sent\n");	
+	} 
+	else if(sizeof(args) == 3) {
+	   werror("sending result to notebook.\n");
+       object msg = .Messages.ExecuteResult(a->msg, digest, (int)(args[1]->dta), args[2]->dta);
+       array m = msg->to_messages();
+       werror("reply: %O\n", m);
+       iopub->send(m);
+	   a->last_result = (int)(args[1]->dta);
+       werror("sent\n");	
+       return;
     } else {
 	  werror("ERROR: Received unknown message from completion handler: %O.\n", args);
 	}
   
-  	iopub->send(.Messages.Status(a, digest, "idle")->to_messages());
+  	iopub->send(.Messages.Status(a->msg, digest, "idle")->to_messages());
   }
   m_delete(awaiting_answers, args[0]->dta);
-  werror("awaiting_answers: %O", awaiting_answers);
+  werror("awaiting_answers: %O", indices(awaiting_answers));
 	  
 }
 
@@ -215,7 +220,7 @@ void handle_message(object socket, .Messages.Message msg) {
 		sessions[msg->header->session] = ([ "runner": hilfeRunner, "ipc": ipc]);
 	  }
 	  
-	  awaiting_answers[msg->header->msg_id] = msg;
+	  awaiting_answers[msg->header->msg_id] = (["msg": msg]);
 	  sessions[msg->header->session]->runner->queue_request(msg);
 	}
 }

@@ -12,9 +12,11 @@ class Options
 
   constant file_help = "Jupyter kernel config file to use.";
   constant remote_help = "Remote IPC port to use.";
+  constant parent_help = "Parent Process ID to monitor.";
 
   Opt file = HasOpt("-f");
   Opt remote = HasOpt("-r");
+  Opt parent = HasOpt("-p");
 }
 
 object kernel;
@@ -37,6 +39,11 @@ int main(int argc, array(string) argv)
 	   werror("Report port %d must be an integer.\n", opts->remote);
 	   exit(2);
 	 }
+	 
+	 if(!(int)opts->parent) {
+	   werror("Parent Process ID must be specified.\n");
+	   exit(3);
+	 }
   }else {
     werror("No configuration file provided.\n");
     exit(1);
@@ -45,7 +52,7 @@ int main(int argc, array(string) argv)
   if(config)
     kernel = Public.Jupyter.Kernel(config);
   else 
-    remote = Public.Jupyter.RemoteHilfe((int)opts->remote);
+    remote = Public.Jupyter.RemoteHilfe((int)opts->remote, (int)opts->parent);
 
   return -1;
 }
