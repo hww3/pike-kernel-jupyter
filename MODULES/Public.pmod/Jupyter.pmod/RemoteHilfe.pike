@@ -44,7 +44,7 @@ int waiting = 0;
 
   void announce() {
     if(!have_announced)
-	   queue->write(({Message("alive")}));
+	   queue_write(({Message("alive")}));
   	call_out(announce, 0.5);
 	//  werror("Announced we're alive\n");
 	  
@@ -57,6 +57,11 @@ int waiting = 0;
 	  // if(rv <0)
       //   werror("Error sending: " + Public.ZeroMQ.errno() + "\n");
       }  
+  }
+  
+  void queue_write(array msgs) {
+    queue->write(msgs);
+	ipc_send(ipc);
   }
 
   void ipc_recv(object socket, mixed ... messages) {
@@ -78,22 +83,22 @@ int waiting = 0;
       add_buffer(line);
 	}
 	
-//	  queue->write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
+//	  queue_write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
 //		(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
 //			))}));
 	  if(sizeof(outbuffer))
-  	   queue->write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
+  	   queue_write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
 	  foreach(res_outbuffer;; string res)
- 	    queue->write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
+ 	    queue_write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
 
 	if(!state->finishedp()) {
-  	   queue->write(({Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
+  	   queue_write(({Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
 		(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
 			))}));
 		state->flush();
 	}
 	else {
-	  queue->write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
+	  queue_write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
 	}
 	  outbuffer = "";
 	  res_outbuffer = ({});
@@ -125,7 +130,7 @@ int waiting = 0;
     ipc = Socket(context, PAIR);
 	//werror("Remote binding on port tcp://localhost:" + port);
     ipc->connect("tcp://localhost:" + port);
-    poll->add_socket(ipc, ipc_recv, ipc_send);
+    poll->add_socket(ipc, ipc_recv);
     call_out(create_poll_threads, 0);
     call_out(announce, 0.5);
 	call_out(check_parent, 5);
@@ -152,6 +157,7 @@ void run_poller(object poller) {
   //werror("Remote Starting poll thread.\n");
   do {
     rv = poll->poll(1.0);
+	sleep(1.0);
 //	werror("Remote Poll completed with rv=%d\n", rv);
   } while (rv >= 0 && keep_going);
   

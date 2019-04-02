@@ -43,7 +43,7 @@ void create(object ipc_socket, string session) {
   werror("HilfeRunner binding on tcp://localhost:" + port + "\n");
   remote_ipc->bind("tcp://*:" + port);
   remote = Process.spawn_pike(({"-x", "pike_kernel", "-r", "" + port, "-p", "" + getpid()}), (["callback": process_state_cb, "stdin": infile, "stdout": outfile, "stderr": errfile]));
-  poll->add_socket(remote_ipc, ipc_recv, ipc_send);
+  poll->add_socket(remote_ipc, ipc_recv);
   call_out(create_poll_threads, 0);
   
 }
