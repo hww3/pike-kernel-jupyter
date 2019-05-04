@@ -300,7 +300,7 @@ void handle_message(object socket, .Messages.Message msg) {
 	  break;
 	  
 	default:
-	  werror("Unknown message type " + header->msg_type +".\n"));
+	  werror("Unknown message type " + header->msg_type +".\n");
 	  break;
   }
   
