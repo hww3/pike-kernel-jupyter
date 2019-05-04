@@ -42,24 +42,24 @@ class Message {
 
    array to_messages() {
       int i = 0;
-      array x = allocate(6);
+      array x = allocate(7);
 	  string json;
-//	  x[0] = Public.ZeroMQ.Message(zmq_ids[0]);
-	  x[0] = Public.ZeroMQ.Message("<IDS|MSG>");
+	  x[0] = Public.ZeroMQ.Message(zmq_ids[0]);
+	  x[1] = Public.ZeroMQ.Message("<IDS|MSG>");
 	  json = Standards.JSON.encode(header);
 	  digest->update(json);
-	  x[2] = Public.ZeroMQ.Message(json);
+	  x[3] = Public.ZeroMQ.Message(json);
 	  json = Standards.JSON.encode(parent_header);
 	  digest->update(json);
-	  x[3] = Public.ZeroMQ.Message(json);
+	  x[4] = Public.ZeroMQ.Message(json);
 	  json = Standards.JSON.encode(metadata);
 	  digest->update(json);
-	  x[4] = Public.ZeroMQ.Message(json);
+	  x[5] = Public.ZeroMQ.Message(json);
 	  json = Standards.JSON.encode(content);
 	  digest->update(json);
-	  x[5] = Public.ZeroMQ.Message(json);
+	  x[6] = Public.ZeroMQ.Message(json);
 	
-      x[1] = Public.ZeroMQ.Message(String.string2hex(digest->digest()));
+      x[2] = Public.ZeroMQ.Message(String.string2hex(digest->digest()));
 	
 	  return x;  
    }
