@@ -99,9 +99,12 @@ void run_poller(object poller) {
 void shell_recv(object socket, mixed ... args) {
   werror("shell_recv: %O => %O\n", socket, args);
   object message = parse_message(args);
-  handle_message(socket, message);
-  werror("dispatched.\n");
-  
+  if(message) {
+    handle_message(socket, message);
+    werror("dispatched.\n");
+  } else {
+    werror("ignored.\n");
+  }
 }
 
 int i;
@@ -172,8 +175,12 @@ void completion_recv(object socket, mixed ... args) {
 void control_recv(object socket, mixed ... args) {
   werror("control_recv: %O => %O\n", socket, args);
   object message = parse_message(args);
-  handle_message(socket, message);
-  werror("dispatched.\n");
+  if(message) { 
+    handle_message(socket, message);
+    werror("dispatched.\n");
+  } else {
+    werror("ignored.\n");
+  }
 }
 
 void hb_recv(object socket, mixed ... args) {
