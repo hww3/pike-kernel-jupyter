@@ -196,7 +196,7 @@ class KernelInfoReply {
       ::create(req, _digest);
 	  
 	  metadata = ([]);
-     content = (["protocol_version": 4.0,
+     content = (["protocol_version": "4.0",
 	 	//		"implementation": "pike-kernel",
 		//		"implementation_version": "0.9",
 				"language": "pike",
