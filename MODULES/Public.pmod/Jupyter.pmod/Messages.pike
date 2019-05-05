@@ -87,6 +87,26 @@ class ShutdownRequest {
   string message_type = "shutdown_request";
 }
 
+class CompleteRequest {
+  inherit Message;
+  string message_type = "complete_request";
+}
+
+class CompleteReply {
+  inherit Message;
+  string message_type = "complete_reply";
+
+  variant protected  void create(CompleteRequest req, object _digest, array matches, int start, int end) {
+    ::create(req, _digest);
+	metadata = ([]);
+     content = (["status": "ok",
+	 			  "cursor_start": start,
+				  "cursor_end": end,
+				  "matches": matches
+				]);
+   }
+
+}
 
 class ExecuteReply {
   inherit Message;
@@ -122,6 +142,15 @@ class ExecuteResult {
      content = (["status": "ok",
 	 			  "execution_count": count,
 				  "data": (["text/plain": res])
+				]);
+   }
+
+   variant protected  void create(ExecuteRequest req, object _digest, int count, mapping res) {
+    ::create(req, _digest);
+	metadata = ([]);
+     content = (["status": "ok",
+	 			  "execution_count": count,
+				  "data": res
 				]);
    }
    

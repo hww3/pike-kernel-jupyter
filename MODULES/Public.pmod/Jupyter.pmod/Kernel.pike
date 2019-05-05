@@ -151,7 +151,24 @@ void completion_recv(object socket, mixed ... args) {
       array m = msg->to_messages();
       werror("reply: %O\n", m);
       shell->send(m);
-	} 
+	} else if(args[1]->dta == "completions") {
+      object msg = .Messages.CompleteReply(a->msg, digest, Standards.JSON.decode(args[2]->dta), a->msg->content->cursor_pos, a->msg->content->cursor_pos);
+      array m = msg->to_messages();
+      werror("reply: %O\n", m);
+      shell->send(m);	
+	} else if(args[1]->dta == "result_object") {
+	   werror("sending object result to notebook.\n");
+	   mapping data = Standards.JSON.decode(args[2]->dta);
+	   int execution_count = (int)(data->execution_count);
+	   m_delete(data, "execution_count");
+       object msg = .Messages.ExecuteResult(a->msg, digest, execution_count, data);
+       array m = msg->to_messages();
+       werror("reply: %O\n", m);
+       iopub->send(m);
+	   a->last_result = execution_count;
+       werror("sent\n");	
+       return;	
+	}
 	else if(sizeof(args) == 3) {
 	   werror("sending result to notebook.\n");
        object msg = .Messages.ExecuteResult(a->msg, digest, (int)(args[1]->dta), args[2]->dta);
@@ -193,7 +210,7 @@ void handle_message(object socket, .Messages.Message msg) {
   if(hmac) digest = hmac(config->key);
 	
     if(msg->message_type == "kernel_info_request") {
-	werror("preparing response\n");
+  	werror("preparing response\n");
   	  iopub->send(.Messages.Status(msg, digest, "busy")->to_messages());
 	  object r = .Messages.KernelInfoReply(msg, digest);
 	  array m = r->to_messages();
@@ -212,23 +229,35 @@ void handle_message(object socket, .Messages.Message msg) {
 	  werror("sent\n");
   	  iopub->send(.Messages.Status(msg, digest, "idle")->to_messages());
 	  
-	 }
-	 else if(msg->message_type == "execute_request") {
-  	  iopub->send(.Messages.Status(msg, digest, "busy")->to_messages());
+	 } else if(msg->message_type == "execute_request") {
+  	  
+	   iopub->send(.Messages.Status(msg, digest, "busy")->to_messages());
 	
-	  if(!sessions[msg->header->session]) {
-	  	int rv;
-	    werror("creating new session\n");
-		object ipc = Socket(context, PUB);
-	    rv = ipc->bind("inproc://hilfe-completion");
-	    if(rv < 0) { werror("binding to socket returned value %d: %s\n", rv, Public.ZeroMQ.strerror(Public.ZeroMQ.errno())); }
-		
-		object hilfeRunner = .HilfeRunner(ipc, msg->header->session);
-		sessions[msg->header->session] = ([ "runner": hilfeRunner, "ipc": ipc]);
-	  }
+       create_session_if_necessary(msg);	
 	  
-	  awaiting_answers[msg->header->msg_id] = (["msg": msg]);
-	  sessions[msg->header->session]->runner->queue_request(msg);
+	   awaiting_answers[msg->header->msg_id] = (["msg": msg]);
+	   sessions[msg->header->session]->runner->queue_request(msg);
+	} else if(msg->message_type == "complete_request") {
+	   iopub->send(.Messages.Status(msg, digest, "busy")->to_messages());
+       create_session_if_necessary(msg);	
+	  
+	   awaiting_answers[msg->header->msg_id] = (["msg": msg]);
+	   sessions[msg->header->session]->runner->queue_request(msg);
+	}
+}
+
+void create_session_if_necessary(.Messages.Message msg) {
+	if(!sessions[msg->header->session]) {
+	  int rv;
+	  werror("creating new session\n");
+ 	  object ipc = Socket(context, PUB);
+      rv = ipc->bind("inproc://hilfe-completion");
+      if(rv < 0) { 
+ 	    werror("binding to socket returned value %d: %s\n", rv, Public.ZeroMQ.strerror(Public.ZeroMQ.errno())); 
+	  }
+		
+	  object hilfeRunner = .HilfeRunner(ipc, msg->header->session);
+	  sessions[msg->header->session] = ([ "runner": hilfeRunner, "ipc": ipc]);
 	}
 }
 
@@ -304,6 +333,10 @@ void handle_message(object socket, .Messages.Message msg) {
 
     case "execute_request":
       message = .Messages.ExecuteRequest(zmq_ids, msg_hmac, header, parent_header, metadata, content, binary_data);
+	  break;
+
+    case "complete_request":
+      message = .Messages.CompleteRequest(zmq_ids, msg_hmac, header, parent_header, metadata, content, binary_data);
 	  break;
 	  
 	default:

@@ -1,5 +1,5 @@
 
- inherit Tools.Hilfe.Evaluator;
+ inherit Tools.KernelHilfe.Evaluator;
  import Public.ZeroMQ;
 
 object infile, outfile;
@@ -84,20 +84,31 @@ int waiting = 0;
 		return;
 	  }
 	}
-	string cmd = messages[1]->dta;
-//	if(cmd != "evaluate") werror("Invalid command received.\n");
+	string cmd = messages[0]->dta;
+	
+  if(cmd == "complete") {
+	string s = messages[2]->dta;
+    array completions = get_completions(s[0..(int)messages[3]->dta]);
+	werror("got completions for %s: %O\n", s[0..(int)messages[3]->dta], completions);
+	queue_write( ({ Message("completions"), Message(messages[1]->dta), Message(Standards.JSON.encode(completions)) }));  
+	// we've completed processing the block of statements sent to us.
+	queue_write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
+	
+  }
+  
+  else if(cmd == "evaluate") {
 	string s = messages[2]->dta;
     foreach(s/"\n";; string line) {
       add_buffer(line);
 	}
 	
-//	  queue_write(({ Message("error"), Message(messages[1]->dta), Message(sprintf("Incomplete Statement: %s",  
-//		(((state->get_pipeline()*"")/"\n")-({""})) * "\n"
-//			))}));
 	  if(sizeof(outbuffer))
   	   queue_write(({Message("stdout"), Message(messages[1]->dta), Message(outbuffer)}));  
-	  foreach(res_outbuffer;; string res)
- 	    queue_write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
+	  foreach(res_outbuffer;; mixed res)
+	    if(stringp(res))
+  	      queue_write( ({ Message("result"), Message(messages[1]->dta), Message(res) }));  
+	    else
+  	      queue_write( ({ Message("result_object"), Message(messages[1]->dta), Message(Standards.JSON.encode(res)) }));  
 
 // version 5.x of jupyter protocol has support for knowing if statement is complete, we may want to use that
 // instead of sending an error.
@@ -114,18 +125,20 @@ int waiting = 0;
 	  outbuffer = "";
 	  res_outbuffer = ({});
   }
-
-
-
+}
+  
 
  //! The standard @[reswrite] function.
  // rather than writing results to stdout and then scraping them, we 
  // can grab them here and add them to a result buffer. that way,
  // actual output from write() will get collected and sent as stdout.
-  void std_reswrite(function w, string sres, int num, mixed res) {
- // werror("RESWRITE: %O %O, %O, %O	\n", w, sres, num, res);
+  void std_reswrite(function w, string sres, int num, mixed res, mixed comp_time, mixed eval_time) {
+ // werror("RESWRITE: %O %O, %O, %O	\n", w, sres, num, res, comp_time, eval_time);
     if(!sres)
       res_outbuffer += ({("Ok.\n")});
+    else if(objectp(res) && res->to_mime_result) {
+	  res_outbuffer += ({res->to_mime_result() + (["execution_count": num])});
+	}
     else
       res_outbuffer += ({sprintf( "(%d) Result: %s\n", num,
          replace(sres, "\n", "\n           "+(" "*sizeof(""+num))) )});
@@ -177,5 +190,5 @@ void run_poller(object poller) {
 	sleep(1.0);
   } while (rv >= 0 && keep_going);
   
-  werror("RemoteHilfeemote Poller exiting.\n");
+  werror("RemoteHilfe Poller exiting.\n");
 }

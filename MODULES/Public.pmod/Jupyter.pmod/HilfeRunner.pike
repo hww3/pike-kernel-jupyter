@@ -76,7 +76,7 @@ void ipc_recv(object socket, mixed ... messages) {
     call_out(write_input, 0);
 	return;
 	}
-  else if((<"stderr", "stdout", "error", "result", "complete">)[messages[0]->dta]) {
+  else if((<"stderr", "stdout", "error", "result",  "result_object", "complete", "completions">)[messages[0]->dta]) {
     if(!msg) { 
 	  werror("Got an out of turn message for a request\n");
 	  return;
@@ -119,10 +119,28 @@ werror("write_input(%O)\n", args);
   mixed m = queue->read();
   if(!m|| !objectp(m->message)) { waiting = 0; return 0; }
   else current_message = m;
-  string s = current_message->message->content->code;
+
+  string request_type;
+  if(current_message->message->message_type == "complete_request") 
+    request_type = "complete";
+  else 
+    request_type = "evaluate";
+
+werror("message content: %O\n", current_message->message->content);		
+  string s = current_message->message->content->code || current_message->message->content->line;
   werror("writing to hilfe: %O, %O\n", s, current_message);
-  remote_ipc->send(({Public.ZeroMQ.Message("evaluate"), Public.ZeroMQ.Message(current_message->message->header->msg_id), 
-		 			Public.ZeroMQ.Message(s)}));
+  
+  array messages = ({Public.ZeroMQ.Message(request_type), Public.ZeroMQ.Message(current_message->message->header->msg_id), 
+		 			Public.ZeroMQ.Message(s)});
+					
+werror("writing:");
+werror("%O\n", messages);
+  if(request_type == "complete") {
+    string pos = current_message->message->content->cursor_pos + "";
+	werror("pos: %O\n", pos);
+    messages += ({Public.ZeroMQ.Message(pos)});
+  }
+  remote_ipc->send(messages);
 }
 
 void complete_request(mixed msg) {
@@ -144,10 +162,10 @@ void complete_request(mixed msg) {
   else
     ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("0"), Public.ZeroMQ.Message("")}));
 } else {
-werror("sending " + msg->state + "\n");
+  werror("sending " + msg->state + "\n");
 
     ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message(msg->state), Public.ZeroMQ.Message(msg->data)}));
-werror("sent " + msg->state + "\n");
+  werror("sent " + msg->state + "\n");
 
 }
   if((<"complete", "error">)[msg->state]) {
