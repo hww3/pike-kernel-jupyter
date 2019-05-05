@@ -557,9 +557,9 @@ class CommandDump {
     case "history":
       write(e->history->status());
       return;
-    case "memory":
-      write(Pike.Lazy.Debug.pp_memory_usage());
-      return;
+//    case "memory":
+//      write(Pike.Lazy.Debug.pp_memory_usage());
+//      return;
     case "":
       dump(e);
       return;
