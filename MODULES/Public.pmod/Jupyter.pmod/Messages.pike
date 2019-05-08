@@ -139,18 +139,18 @@ class ExecuteResult {
    variant protected  void create(ExecuteRequest req, object _digest, int count, string res) {
     ::create(req, _digest);
 	metadata = ([]);
-     content = (["status": "ok",
-	 			  "execution_count": count,
-				  "data": (["text/plain": res])
+     content = ([ "execution_count": count,
+				  "data": (["text/plain": res]),
+				  "metadata": ([])
 				]);
    }
 
    variant protected  void create(ExecuteRequest req, object _digest, int count, mapping res) {
     ::create(req, _digest);
 	metadata = ([]);
-     content = (["status": "ok",
-	 			  "execution_count": count,
-				  "data": res
+     content = ([ "execution_count": count,
+				  "data": res,
+				  "metadata": ([])
 				]);
    }
    

@@ -1,5 +1,6 @@
 inherit .MimeResult;
 
+// TODO include image dims
 
 protected variant void create(Image.Image _result) {
   result = _result;
