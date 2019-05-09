@@ -230,12 +230,12 @@ class KernelInfoReply {
 		//		"implementation_version": "0.9",
 				"language": "pike",
 				"language_version": "8.0", 
-/*				"language_info" : (["name": "pike",
+				"language_info" : (["name": "pike",
 						"version": version(),
 						"mimetype": "application/pike",
 						"file_extension":  ".pike"]),
 				"banner": "Pike, yeah!"
-				*/
+				
 				]);
    }   
 }

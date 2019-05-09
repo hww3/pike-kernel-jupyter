@@ -108,6 +108,7 @@ void shell_recv(object socket, mixed ... args) {
 }
 
 int i;
+
 void completion_recv(object socket, mixed ... args) {
   werror("completion_recv: %O => %O\n", socket, args);
   
@@ -147,7 +148,7 @@ void completion_recv(object socket, mixed ... args) {
 	  iopub->send(.Messages.Stream(a->msg, digest, "stderr", args[2]->dta)->to_messages());
 	  return;
 	} else if(args[1]->dta == "complete") {
-      object msg = .Messages.ExecuteReply(a->msg, digest, a->last_result, args[2]->dta);
+      object msg = .Messages.ExecuteReply(a->msg, digest, sessions[a->msg->header->session]->last_result, args[2]->dta);
       array m = msg->to_messages();
       werror("reply: %O\n", m);
       shell->send(m);
@@ -160,28 +161,33 @@ void completion_recv(object socket, mixed ... args) {
 	   werror("sending object result to notebook.\n");
 	   mapping data = Standards.JSON.decode(args[2]->dta);
 	   int execution_count = (int)(data->execution_count);
+	   if(!execution_count) execution_count = sessions[a->msg->header->session]->last_result;
+	   sessions[a->msg->header->session]->last_result = execution_count;
+	   
 	   m_delete(data, "execution_count");
        object msg = .Messages.ExecuteResult(a->msg, digest, execution_count, data);
        array m = msg->to_messages();
        werror("reply: %O\n", m);
        iopub->send(m);
-	   a->last_result = execution_count;
        werror("sent\n");	
        return;	
 	}
 	else if(sizeof(args) == 3) {
 	   werror("sending result to notebook.\n");
-       object msg = .Messages.ExecuteResult(a->msg, digest, (int)(args[1]->dta), args[2]->dta);
+	   int ec = (int)(args[1]->dta);
+	   if(!ec) ec = sessions[a->msg->header->session]->last_result;
+	   sessions[a->msg->header->session]->last_result = ec;
+       object msg = .Messages.ExecuteResult(a->msg, digest, ec, args[2]->dta);
        array m = msg->to_messages();
        werror("reply: %O\n", m);
        iopub->send(m);
-	   a->last_result = (int)(args[1]->dta);
        werror("sent\n");	
        return;
     } else {
 	  werror("ERROR: Received unknown message from completion handler: %O.\n", args);
 	}
   
+    werror("sending idle.\n");
   	iopub->send(.Messages.Status(a->msg, digest, "idle")->to_messages());
   }
   m_delete(awaiting_answers, args[0]->dta);
@@ -257,7 +263,7 @@ void create_session_if_necessary(.Messages.Message msg) {
 	  }
 		
 	  object hilfeRunner = .HilfeRunner(ipc, msg->header->session);
-	  sessions[msg->header->session] = ([ "runner": hilfeRunner, "ipc": ipc]);
+	  sessions[msg->header->session] = ([ "runner": hilfeRunner, "ipc": ipc, "last_result": 1]);
 	}
 }
 
