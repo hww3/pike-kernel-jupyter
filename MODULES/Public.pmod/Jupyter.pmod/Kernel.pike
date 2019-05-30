@@ -21,6 +21,8 @@ Thread.Thread poll_thread;
 
 object hmac;
 
+object time = System.Time();
+ 
 mapping awaiting_answers = ([]);
 mapping sessions = ([]);
 
@@ -97,11 +99,11 @@ void run_poller(object poller) {
 }
 
 void shell_recv(object socket, mixed ... args) {
-  werror("shell_recv: %O => %O\n", socket, args);
+  werror("%s shell_recv: %O => %O\n", getTime(), socket, args);
   object message = parse_message(args);
   if(message) {
     handle_message(socket, message);
-    werror("dispatched.\n");
+    werror("%s dispatched.\n", getTime());
   } else {
     werror("ignored.\n");
   }
@@ -110,7 +112,7 @@ void shell_recv(object socket, mixed ... args) {
 int i;
 
 void completion_recv(object socket, mixed ... args) {
-  werror("completion_recv: %O => %O\n", socket, args);
+  werror("%s completion_recv: %O => %O\n", getTime(), socket, args);
   
   if(sizeof(args) == 2) { // status change
      if(args[0]->dta == "DIED") {
@@ -119,10 +121,10 @@ void completion_recv(object socket, mixed ... args) {
  	 }
 	 return;
   }
-  werror("awaiting_answers: %O", indices(awaiting_answers));
+  //werror("awaiting_answers: %O", indices(awaiting_answers));
   mixed a = awaiting_answers[args[0]->dta];
   if(a) {
-  werror("got matching request\n");
+  //werror("got matching request\n");
       object digest;
     if(hmac) digest = hmac(config->key);
   
@@ -130,35 +132,35 @@ void completion_recv(object socket, mixed ... args) {
     if(args[1]->dta == "error") {
       object msg = .Messages.ExecuteReply(a->msg, digest, args[2]->dta);
       array m = msg->to_messages();
-      werror("reply: %O\n", m);
+      //werror("reply: %O\n", m);
       shell->send(m);
 
       msg = .Messages.Error(a->msg, digest, args[2]->dta);
       m = msg->to_messages();
-      werror("reply: %O\n", m);
+      //werror("reply: %O\n", m);
       iopub->send(m);
-      werror("sent\n");	
+      //werror("sent\n");	
 	
 	} else if(args[1]->dta == "stdout") {
-	werror("sending stdout to notebook.\n");
+	//werror("sending stdout to notebook.\n");
 	  iopub->send(.Messages.Stream(a->msg, digest, "stdout", args[2]->dta)->to_messages());
 	  return;
 	} else if(args[1]->dta == "stderr") {
-	werror("sending stderr to notebook.\n");
+	// werror("sending stderr to notebook.\n");
 	  iopub->send(.Messages.Stream(a->msg, digest, "stderr", args[2]->dta)->to_messages());
 	  return;
 	} else if(args[1]->dta == "complete") {
       object msg = .Messages.ExecuteReply(a->msg, digest, sessions[a->msg->header->session]->last_result, args[2]->dta);
       array m = msg->to_messages();
-      werror("reply: %O\n", m);
+      //werror("reply: %O\n", m);
       shell->send(m);
 	} else if(args[1]->dta == "completions") {
       object msg = .Messages.CompleteReply(a->msg, digest, Standards.JSON.decode(args[2]->dta), a->msg->content->cursor_pos, a->msg->content->cursor_pos);
       array m = msg->to_messages();
-      werror("reply: %O\n", m);
+      //werror("reply: %O\n", m);
       shell->send(m);	
 	} else if(args[1]->dta == "result_object") {
-	   werror("sending object result to notebook.\n");
+	   //werror("sending object result to notebook.\n");
 	   mapping data = Standards.JSON.decode(args[2]->dta);
 	   int execution_count = (int)(data->execution_count);
 	   if(!execution_count) execution_count = sessions[a->msg->header->session]->last_result;
@@ -167,13 +169,13 @@ void completion_recv(object socket, mixed ... args) {
 	   m_delete(data, "execution_count");
        object msg = .Messages.ExecuteResult(a->msg, digest, execution_count, data);
        array m = msg->to_messages();
-       werror("reply: %O\n", m);
+      // werror("reply: %O\n", m);
        iopub->send(m);
-       werror("sent\n");	
+      // werror("sent\n");	
        return;	
 	}
 	else if(sizeof(args) == 3) {
-	   werror("sending result to notebook.\n");
+	  // werror("sending result to notebook.\n");
 	   int ec = (int)(args[1]->dta);
 	   if(!ec) ec = sessions[a->msg->header->session]->last_result;
 	   sessions[a->msg->header->session]->last_result = ec;
@@ -181,46 +183,47 @@ void completion_recv(object socket, mixed ... args) {
        array m = msg->to_messages();
        werror("reply: %O\n", m);
        iopub->send(m);
-       werror("sent\n");	
+       // werror("sent\n");	
        return;
     } else {
 	  werror("ERROR: Received unknown message from completion handler: %O.\n", args);
 	}
   
-    werror("sending idle.\n");
+    // werror("sending idle.\n");
   	iopub->send(.Messages.Status(a->msg, digest, "idle")->to_messages());
   }
   m_delete(awaiting_answers, args[0]->dta);
-  werror("awaiting_answers: %O", indices(awaiting_answers));
+  // werror("awaiting_answers: %O", indices(awaiting_answers));
 	  
 }
 
 void control_recv(object socket, mixed ... args) {
-  werror("control_recv: %O => %O\n", socket, args);
+  werror("%s control_recv: %O => %O\n", getTime(), socket, args);
   object message = parse_message(args);
   if(message) { 
     handle_message(socket, message);
-    werror("dispatched.\n");
+  //  werror("dispatched.\n");
   } else {
-    werror("ignored.\n");
+  //  werror("ignored.\n");
   }
 }
 
 void hb_recv(object socket, mixed ... args) {
-  werror("hb_recv: %O => %O\n", socket, args);
+ // werror("hb_recv: %O => %O\n", socket, args);
   socket->send(Message("pong"), 0);
 }
 
 void handle_message(object socket, .Messages.Message msg) {
     object digest;
   if(hmac) digest = hmac(config->key);
+	werror("%s handle_message: %O\n", getTime(), msg);
 	
     if(msg->message_type == "kernel_info_request") {
-  	werror("preparing response\n");
+  //	werror("preparing response\n");
   	  iopub->send(.Messages.Status(msg, digest, "busy")->to_messages());
 	  object r = .Messages.KernelInfoReply(msg, digest);
 	  array m = r->to_messages();
-	  werror("reply: %O\n", m);
+	//  werror("reply: %O\n", m);
 	  socket->send(m);
 	  werror("sent\n");
   	  iopub->send(.Messages.Status(msg, digest, "idle")->to_messages());
@@ -229,10 +232,10 @@ void handle_message(object socket, .Messages.Message msg) {
 
 	  object r = .Messages.ShutdownReply(msg, digest);
 	  array m = r->to_messages();
-	  werror("reply: %O\n", m);
+	  // werror("reply: %O\n", m);
 	  socket->send(m);
 	  call_out(exit, 1, 0);
-	  werror("sent\n");
+	  // werror("sent\n");
   	  iopub->send(.Messages.Status(msg, digest, "idle")->to_messages());
 	  
 	 } else if(msg->message_type == "execute_request") {
@@ -320,7 +323,7 @@ void create_session_if_necessary(.Messages.Message msg) {
    string h = String.string2hex(digest->digest());
    //werror("our hmac=%O", h);
    if(h != msg_hmac) throw(Error.Generic("HMAC comparison failed. Expected " + msg_hmac +", got " + h + ".\n"));
-   else werror("HMAC looks good. Message is authentic.\n");
+   // else werror("HMAC looks good. Message is authentic.\n");
  }
   
   //werror("zmq_ids=%O, hmac=%O, digest=%O, header=%O, parent_header=%O, metadata=%O, content=%O, binary_data=%O\n",
@@ -350,6 +353,10 @@ void create_session_if_necessary(.Messages.Message msg) {
 	  break;
   }
   
-  werror("message=%O\n", message);
+  werror("%s message=%O\n", getTime(), message);
   return message;
+}
+
+string getTime() {
+   return replace(ctime(time->sec), "\n", ".") + sprintf("%03d", time->usec/1000);
 }

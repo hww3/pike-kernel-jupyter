@@ -17,6 +17,12 @@ int keep_going = 1;
 int started = 0;
 string session_id;
 
+object time = System.Time();
+
+  string getTime() {
+     return replace(ctime(time->sec), "\n", ".") + sprintf("%03d", time->usec/1000);
+  }
+
 void create(object ipc_socket, string session) {
   ipc = ipc_socket;
   session_id = session;
@@ -57,65 +63,84 @@ void process_state_cb(Process.Process process) {
   }
 }
 
-void ipc_send(object socket) {
- // werror("Sending areyouthereyet\n");
- // ipc->send(Message("AREYOUTHEREYET"), 0);
-}
+//Thread.Mutex ipc_mutex = Thread.Mutex();
 
 void ipc_recv(object socket, mixed ... messages) {
-  werror("IPC: %O\n", messages);
-  mixed msg = current_message;
-  
-  if(sizeof(messages) > 1 && messages[1]->dta != msg->message->header->msg_id) {
-    werror("WARNING: Received a message from RemoteHilfe for different request");
-  } 
-  
+  Thread.MutexKey key = mutex->lock();
+  mixed msg = ([]);
+  werror("%s IPC: %O\n", getTime(), messages);
+/*
+  if(sizeof(messages) > 1 && (!msg || messages[1]->dta != msg->message->header->msg_id)) {
+    werror("WARNING: Received a message from RemoteHilfe for different request: got %s expected %s\n", messages[1]->dta, (msg?msg->message->header->msg_id:"no message"));
+  }
+  */
   if(messages[0]->dta == "alive") {
     remote_ipc->send(Message("gladtohearit"), 0);
 	started = 1;
     call_out(write_input, 0);
+	key = 0;
 	return;
 	}
   else if((<"stderr", "stdout", "error", "result",  "result_object", "complete", "completions">)[messages[0]->dta]) {
     if(!msg) { 
 	  werror("Got an out of turn message for a request\n");
+	  key = 0;
 	  return;
 	}
     msg->state = messages[0]->dta;
+	msg->request_id = messages[1]->dta;
     msg->data = messages[2]->dta;
     complete_request(msg);
   } else {
      werror("Unknown message %s\n", messages[0]->dta);
   }
+  key = 0;
 }
 
 void read_stdout(mixed id, string data) {
-if(current_message)
- ipc->send(({Public.ZeroMQ.Message(current_message->message->header->msg_id), Public.ZeroMQ.Message("stdout"), Public.ZeroMQ.Message(data)}));
+ object key = mutex->lock();
+ send_stdout(data); 
+ key = 0;
+}
+
+void send_stdout(string data) {
+  if(current_message)
+     ipc->send(({Public.ZeroMQ.Message(current_message->message->header->msg_id), Public.ZeroMQ.Message("stdout"), Public.ZeroMQ.Message(data)}));
 }
 
 void read_stderr(mixed id, string data) {
-if(current_message)
- ipc->send(({Public.ZeroMQ.Message(current_message->message->header->msg_id), Public.ZeroMQ.Message("stderr"), Public.ZeroMQ.Message(data)}));
+  object key = mutex->lock();
+  send_stderr(data);
+ key = 0;
+}
+
+void send_stderr(string data) {
+  if(current_message)
+    ipc->send(({Public.ZeroMQ.Message(current_message->message->header->msg_id), Public.ZeroMQ.Message("stderr"),    Public.ZeroMQ.Message(data)}));
 }
 
 void queue_request(object message) {
-werror("queueing request %O\n", message);
+werror("%s queueing request %O\n", getTime(), message);
   queue->write((["message": message]));
   write_input();
 }
 
+Thread.Mutex mutex = Thread.Mutex();
+
 mixed write_input(mixed ... args) {
-werror("write_input(%O)\n", args);
-  if(!started) {
-    werror("haven't started yet.\n");
-    return 0;
-  }
+  Thread.MutexKey key = mutex->lock();
   if(waiting) {
-  	werror("skipping because we're waiting\n");  
+  	werror("skipping because we're waiting: %O\n", current_message);  
+	key = 0;
 	return 0; 
   }
+  if(!started) {
+    werror("haven't started yet.\n");
+	key = 0;
+    return 0;
+  }
   waiting = 1;
+  werror("write_input(%O)\n", args);
   mixed m = queue->read();
   if(!m|| !objectp(m->message)) { waiting = 0; return 0; }
   else current_message = m;
@@ -133,7 +158,7 @@ werror("message content: %O\n", current_message->message->content);
   array messages = ({Public.ZeroMQ.Message(request_type), Public.ZeroMQ.Message(current_message->message->header->msg_id), 
 		 			Public.ZeroMQ.Message(s)});
 					
-werror("writing:");
+werror("%s writing:", getTime());
 werror("%O\n", messages);
   if(request_type == "complete") {
     string pos = current_message->message->content->cursor_pos + "";
@@ -141,6 +166,8 @@ werror("%O\n", messages);
     messages += ({Public.ZeroMQ.Message(pos)});
   }
   remote_ipc->send(messages);
+  werror("%s wrote to hilfe: %O, %O\n", getTime(), s, current_message);
+  key = 0;
 }
 
 void complete_request(mixed msg) {
@@ -157,23 +184,57 @@ void complete_request(mixed msg) {
   };
  
   if(count && out)
-    ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("" + count),
+    ipc->send(({Public.ZeroMQ.Message(msg->request_id), Public.ZeroMQ.Message("" + count),
 		 			Public.ZeroMQ.Message((sizeof(warn)?(warn+"\n"):"") + out)}));
   else
-    ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message("0"), Public.ZeroMQ.Message("")}));
+    ipc->send(({Public.ZeroMQ.Message(msg->request_id), Public.ZeroMQ.Message("0"), Public.ZeroMQ.Message("")}));
 } else {
   werror("sending " + msg->state + "\n");
 
-    ipc->send(({Public.ZeroMQ.Message(msg->message->header->msg_id), Public.ZeroMQ.Message(msg->state), Public.ZeroMQ.Message(msg->data)}));
+  // make sure that we send any stdout or stderr before we mark the request complete.
+  if((<"complete", "error">)[msg->state]) {
+    try_read_data();
+  }
+
+    ipc->send(({Public.ZeroMQ.Message(msg->request_id), Public.ZeroMQ.Message(msg->state), Public.ZeroMQ.Message(msg->data)}));
   werror("sent " + msg->state + "\n");
 
-}
+  }
   if((<"complete", "error">)[msg->state]) {
     current_message = 0;
+    waiting = 0;
     call_out(write_input, 0);
   }
-	
 } 	
+
+  void try_read_data() {
+  myoutfile->set_blocking_keep_callbacks();
+  string so = "";
+  string s;
+  do {
+    s = 0;
+    if(myoutfile->peek(0.01))
+      s = myoutfile->read(1024, 1);
+	if(s) so += s;
+  } while(s);
+      
+  if(sizeof(so)) send_stdout(so);
+  
+  myoutfile->set_nonblocking();
+  
+  myerrfile->set_blocking_keep_callbacks();
+  string se = "";
+  do {
+    s = 0;
+    if(myerrfile->peek(0.01))
+      s = myerrfile->read(1024, 1);
+	if(s) se += s;
+  } while(s);
+      
+  if(sizeof(se)) send_stderr(se);
+  
+  myerrfile->set_nonblocking();  
+  }
 
   void create_poll_threads() {
     werror("HilfeRunner Starting poller 1\n");

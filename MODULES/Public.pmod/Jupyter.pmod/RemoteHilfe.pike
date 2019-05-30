@@ -14,6 +14,7 @@ int have_announced = 0;
 int parent_id;
 
 ADT.Queue queue = ADT.Queue();
+object time = System.Time();
 
 int waiting = 0;
 
@@ -21,6 +22,11 @@ int waiting = 0;
   array res_outbuffer = ({});
   
   mapping current_msg;
+  
+
+  string getTime() {
+     return replace(ctime(time->sec), "\n", ".") + sprintf("%03d", time->usec/1000);
+  }
   
   void print_version() {
   }
@@ -58,6 +64,7 @@ int waiting = 0;
   void ipc_send(object socket) {
      array x = queue->read();
 	 if(x) {
+	 //werror("%s Sending to kernel: %O\n", getTime(), x);
        int rv = ipc->send(x);
 	  // if(rv <0)
       //   werror("Error sending: " + Public.ZeroMQ.errno() + "\n");
@@ -71,16 +78,21 @@ int waiting = 0;
 	ipc_send(ipc);
   }
 
+  Thread.Mutex mutex = Thread.Mutex();
   // read callback for hilferunner-remotehilfe zmq socket
   void ipc_recv(object socket, mixed ... messages) {
+    Thread.MutexKey key = mutex->lock();
+	 //werror("%s Received from kernel: %O\n", getTime(), messages);
     //werror("IPC RECV: %O\n", messages);
 	if(sizeof(messages) == 1) {
 	  if(messages[0]->dta == "gladtohearit") {
 	  //werror("Have announced\n");
 	  have_announced = 1;
+	  key = 0;
 	  return;
 	  } else {
 	    //werror("RemoteHilfe: got unknown message: " + messages[0]->dta + "\n");
+		key = 0;
 		return;
 	  }
 	}
@@ -120,11 +132,12 @@ int waiting = 0;
 	}
 	else {
 	// we've completed processing the block of statements sent to us.
-	  queue_write( ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
+	  call_out(queue_write, 0, ({ Message("complete"), Message(messages[1]->dta), Message("") }));  
 	}
 	  outbuffer = "";
 	  res_outbuffer = ({});
   }
+  key = 0;
 }
   
 
@@ -187,7 +200,7 @@ void run_poller(object poller) {
   
   do {
     rv = poll->poll(1.0);
-	sleep(1.0);
+//	sleep(1.0);
   } while (rv >= 0 && keep_going);
   
   werror("RemoteHilfe Poller exiting.\n");
