@@ -3,6 +3,10 @@
 pike-kernel-jupyter is a Kernel for the Jupyter interactive computing tool. This kernel is written in 
 Pike and speaks the Jupyter protocol. 
 
+## Demo
+
+See a ready-to-test demo using Binder at https://bitbucket.org/hww3/pike-binder-example
+
 ## Prerequisites:
 
 zeromq - sometimes called libzmq (if you have jupyter installed, it's likely you already have this)
@@ -40,3 +44,9 @@ You can activate the Pike kernel for a notebook by using the "Change Kernel" com
 
 jupyter kernelspec remove pike-kernel
 
+## TODO
+
+- upstream hilfe changes
+- better code completion (a hilfe improvement, actually)
+- mechanism for automatically wrapping responses such as Image objects
+- widgets
